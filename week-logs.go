@@ -13,8 +13,19 @@ import (
 	"io/ioutil"
 )
 
+var funcMap = template.FuncMap{
+	"date": func(format string, date time.Time) string {
+		return date.Format(format)
+	},
+	"minutes": func(duration time.Duration) string {
+		return fmt.Sprintf("%vmin", duration.Minutes())
+	},
+}
+var config *Config
+
 func main() {
-	config := &Config{}
+
+	config = &Config{}
 
 	configBytes, err := ioutil.ReadFile("config.json")
 	if err != nil {
@@ -26,59 +37,59 @@ func main() {
 		log.Fatalf("Unable to unmarshal the config file. %v", err)
 	}
 
-	oauthClient := setupOAuth()
+	oauthClient, err := setupOAuth()
+	if err != nil {
+		log.Fatalf("Unable to setup OAuth. %v", err)
+	}
 
 	sheetsService, err := sheets.New(oauthClient)
 	if err != nil {
 		log.Fatalf("Unable to retrieve Sheets Client %v", err)
 	}
 
-	logs, err := collectLogs(sheetsService, config.Sheet.Id, config.Sheet.Selection)
+	logCollection, err := collectLogs(sheetsService, config.Sheet.Id, config.Sheet.Selection)
 	if err != nil {
 		log.Fatalf("Unable to generate the records from the sheet. %v", err)
 	}
 
-	funcMap	:= template.FuncMap{
-		"date": func(format string, date time.Time) string {
-			return date.Format(format)
-		},
-		"minutes": func(duration time.Duration) string {
-			return fmt.Sprintf("%vmin", duration.Minutes())
-		},
+	t, err := template.New(config.Language + ".html").Funcs(funcMap).ParseFiles("templates/" + config.Language + ".html")
+	if err != nil {
+		log.Fatalf("Unable to parse template files. %v", err)
 	}
 
-	t, err := template.New("templates/"+ config.Language +".html").Funcs(funcMap).ParseFiles("template.html")
-
-	for week, logs := range logs {
-		htmlBuffer := bytes.NewBufferString("")
-
-		err := t.Execute(htmlBuffer, struct{
-			Name string
-			Week int
-			Logs []*Log
-			Company *Company
-			Columns []string
-		}{
-			Name: config.Name,
-			Week: week,
-			Logs: logs,
-			Company: &config.Company,
-			Columns: config.Sheet.Columns,
-		})
-
+	for week, logs := range logCollection {
+		renderLogs(t, logs, week, config.Result)
 		if err != nil {
-			log.Fatalf("Unable to render html. %v", err)
-		}
-
-		cmd := exec.Command("wkhtmltopdf", "-", fmt.Sprintf(config.Result, week))
-		cmd.Stdin = htmlBuffer
-		cmd.Stdout = os.Stdout
-		err = cmd.Run()
-
-		if err != nil {
-			log.Fatalf("Unable to render pdf. %v", err)
+			log.Fatalf("Unable to render logs. %v", err)
 		}
 	}
+}
+
+func renderLogs(t *template.Template, logs[]*Log, week int, filenameFormat string) error {
+	htmlBuffer := bytes.NewBufferString("")
+
+	err := t.Execute(htmlBuffer, &TemplateData{
+		Name:    config.Name,
+		Week:    week,
+		Logs:    logs,
+		Company: &config.Company,
+		Columns: config.Sheet.Columns,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	renderPdfFromHtml(htmlBuffer, fmt.Sprintf(filenameFormat, week))
+
+	return nil
+}
+
+func renderPdfFromHtml(html *bytes.Buffer, file string) error {
+	cmd := exec.Command("wkhtmltopdf", "-", file)
+	cmd.Stdin = html
+	cmd.Stdout = os.Stdout
+	return cmd.Run()
 }
 
 func collectLogs(srv *sheets.Service, spreadsheetId, readRange string) (logs map[int][]*Log, _ error) {
@@ -125,6 +136,14 @@ type Config struct {
 	Result string `json:"result"`
 	Company Company `json:"company"`
 	Sheet Sheet `json:"sheet"`
+}
+
+type TemplateData struct {
+	Name string
+	Week int
+	Logs []*Log
+	Company *Company
+	Columns []string
 }
 
 type Company struct {

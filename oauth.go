@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os/user"
 	"io/ioutil"
@@ -17,36 +16,42 @@ import (
 
 // getClient uses a Context and Config to retrieve a Token
 // then generate a Client. It returns the generated Client.
-func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
+func getClient(ctx context.Context, config *oauth2.Config) (*http.Client, error) {
 	cacheFile, err := tokenCacheFile()
 	if err != nil {
-		log.Fatalf("Unable to get path to cached credential file. %v", err)
+		return nil, err
 	}
 	tok, err := tokenFromFile(cacheFile)
 	if err != nil {
-		tok = getTokenFromWeb(config)
-		saveToken(cacheFile, tok)
+		tok, err = getTokenFromWeb(config)
+		if err != nil {
+			return nil, err
+		}
+		err = saveToken(cacheFile, tok)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return config.Client(ctx, tok)
+	return config.Client(ctx, tok), nil
 }
 
 // getTokenFromWeb uses Config to request a Token.
 // It returns the retrieved Token.
-func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
+func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 	fmt.Printf("Go to the following link in your browser then type the "+
 		"authorization code: \n%v\n", authURL)
 
 	var code string
 	if _, err := fmt.Scan(&code); err != nil {
-		log.Fatalf("Unable to read authorization code %v", err)
+		return nil, err
 	}
 
-	tok, err := config.Exchange(context.TODO(), code)
+	tok, err := config.Exchange(context.Background(), code)
 	if err != nil {
-		log.Fatalf("Unable to retrieve token from web %v", err)
+		return nil, err
 	}
-	return tok
+	return tok, nil
 }
 
 // tokenCacheFile generates credential file path/filename.
@@ -59,7 +64,7 @@ func tokenCacheFile() (string, error) {
 	tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
 	os.MkdirAll(tokenCacheDir, 0700)
 	return filepath.Join(tokenCacheDir,
-		url.QueryEscape("sheets.googleapis.com-go-quickstart.json")), err
+		url.QueryEscape("sheets.googleapis.com-go-week-logs.json")), err
 }
 
 // tokenFromFile retrieves a Token from a given file path.
@@ -77,29 +82,30 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
 
 // saveToken uses a file path to create a file and store the
 // token in it.
-func saveToken(file string, token *oauth2.Token) {
+func saveToken(file string, token *oauth2.Token) error {
 	fmt.Printf("Saving credential file to: %s\n", file)
 	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		log.Fatalf("Unable to cache oauth token: %v", err)
+		return err
 	}
 	defer f.Close()
 	json.NewEncoder(f).Encode(token)
+	return nil
 }
 
-func setupOAuth() *http.Client {
+func setupOAuth() (*http.Client, error) {
 	ctx := context.Background()
 
 	b, err := ioutil.ReadFile("client_secret.json")
 	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
+		return nil, err
 	}
 
 	// If modifying these scopes, delete your previously saved credentials
 	// at ~/.credentials/sheets.googleapis.com-go-quickstart.json
 	config, err := google.ConfigFromJSON(b, "https://www.googleapis.com/auth/spreadsheets.readonly")
 	if err != nil {
-		log.Fatalf("Unable to parse client secret file to config: %v", err)
+		return nil, err
 	}
 
 	return getClient(ctx, config)
