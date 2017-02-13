@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Logboek week: {{.Week}}</title>
+        <style>
+            * {
+                font-size: 45pt;
+                font-family: 'Roboto', sans-serif;
+            }
+            h1 {
+                font-size: 78pt;
+                text-transform: uppercase;
+            }
+            .table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .table thead th {
+                padding: 20px;
+                text-align: left;
+                border: 4px solid #000;
+                text-wrap: avoid;
+                text-transform: uppercase;
+            }
+            .table tbody td {
+                padding: 20px;
+                border: 4px solid #000;
+            }
+            .table-header {
+                margin: 0 0 50px;
+            }
+            .table-header td {
+                width: 60%;
+            }
+            .time {
+                width: 300px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Urenverantwoording BPV</h1>
+        <table class="table-header">
+            <tr>
+                <td>Naam: {{.Name}}</td>
+                <td>Bedrijf: {{.Company.Name}}</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>Praktijkopleider: {{.Company.Leader}}<br></td>
+            </tr>
+        </table>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th colspan="4">Weeknummer: {{.Week}}</th>
+                </tr>
+                <tr>
+                    {{range .Columns }}
+                        <th>{{.}}</th>
+                    {{end}}
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Logs}}
+                    <tr>
+                        <td>{{.Day | date "02/01/2006"}}</td>
+                        <td>{{.Description}}</td>
+                        <td>{{.Particularities}}</td>
+                        <td class="time">{{.Duration | minutes}}</td>
+                    </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </body>
+</html>
