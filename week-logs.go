@@ -52,13 +52,13 @@ func main() {
 		log.Fatalf("Unable to generate the records from the sheet. %v", err)
 	}
 
-	t, err := template.New(config.Language + ".html").Funcs(funcMap).ParseFiles("templates/" + config.Language + ".html")
+	t, err := template.New("pdf.html").Funcs(funcMap).ParseFiles("templates/" + config.Language + "/pdf.html")
 	if err != nil {
 		log.Fatalf("Unable to parse template files. %v", err)
 	}
 
 	for week, logs := range logCollection {
-		renderLogs(t, logs, week, config.Result)
+		err = renderLogs(t, logs, week, config.Result)
 		if err != nil {
 			log.Fatalf("Unable to render logs. %v", err)
 		}
